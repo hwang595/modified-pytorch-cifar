@@ -26,7 +26,7 @@ parser.add_argument('--amp', action='store_true',
                     help='mixed precision training')
 args = parser.parse_args()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
@@ -71,12 +71,13 @@ print('==> Building model..')
 #net = LowrankResNet50()
 net = ResNet18()
 net = net.to(device)
+cudnn.benchmark = True
 
 print("#### Net: {}, Num Params: {}".format(net, param_counter(net)))
 
-if device == 'cuda':
-    net = torch.nn.DataParallel(net)
-    cudnn.benchmark = True
+#if device == 'cuda':
+#    #net = torch.nn.DataParallel(net)
+    
 
 if args.resume:
     # Load checkpoint.
