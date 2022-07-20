@@ -10,21 +10,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+@torch.jit.script
+def fused_factorized_conv(x, conv1_weight, conv2_weight, padding=0, stride=1, dilation=1):
+    out = F.conv2d(x, conv1_weight, bias=None, 
+                    stride=stride, padding=padding, dilation=dilation)
+    out = F.conv2d(out, conv2_weight, bias=None,
+                stride=1, padding=1, dilation=1)
+    return out
 
 class FusedConvKernel(nn.Module):
-    def __init__(in_dim, out_dim, padding=0, stride=1, dilation=1, factorization_ratio=0.125):
+    def __init__(in_dim, out_dim, kernel_size=3, factorization_ratio=0.125, padding=0, stride=1, dilation=1):
         rank = int(factorization_ratio * min(in_dim, out_dim))
-        self.u_layer = nn.Conv2d(in_dim, rank, stride=stride, padding=padding, bias=False)
-        self.u_bn = nn.BatchNorm2d(rank)
-        self.v_layer = nn.Conv2d(rank, out_dim, stride=1, padding=1, bias=False)
-        self.v_bn = nn.BatchNorm2d(planes)
+        self.conv1_weight = torch.nn.Parameter(torch.randn(rank, in_dim, kernel_size, kernel_size))
+        self.conv2_weight = torch.nn.Parameter(torch.randn(out_dim, rank, 1, 1))
+        self.padding = padding
+        self.stride = stride
+        self.dilation = dilation
     
-    @torch.jit.script
     def forward(self, x):
-        x = self.u_layer(x)
-        x = self.u_bn(x)
-        x = self.v_layer(x)
-        x = self.v_bn(x)    
+        x = fused_factorized_conv(x, conv1_weight, conv2_weight, self.padding, self.stride, self.dilation)
+        #x = self.u_layer(x)
+        #x = self.u_bn(x)
+        #x = self.v_layer(x)
+        #x = self.v_bn(x)
         return x
 
 
