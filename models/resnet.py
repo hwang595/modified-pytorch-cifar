@@ -11,6 +11,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class FusedConvKernel(nn.Module):
+    def __init__(in_dim, out_dim, padding=0, stride=1, dilation=1, factorization_ratio=0.125):
+    rank = int(factorization_ratio * min(in_dim, out_dim))
+    self.u_layer = nn.Conv2d(in_dim, rank, stride=stride, padding=padding, bias=False)
+    self.u_bn = nn.BatchNorm2d(rank)
+    self.v_layer = nn.Conv2d(rank, out_dim, stride=1, padding=1, bias=False)
+    self.v_bn = nn.BatchNorm2d(planes)
+    
+    @torch.jit.script
+    def forward(self, x):
+        x = self.u_layer(x)
+        x = self.u_bn(x)
+        x = self.v_layer(x)
+        x = self.v_bn(x)    
+    return x
+
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -70,6 +87,35 @@ class LowRankBasicBlock(nn.Module):
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1_v(self.conv1_u(x))))
         out = self.bn2(self.conv2_v(self.conv2_u(out)))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+
+class FusedLowRankBasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(FusedLowRankBasicBlock, self).__init__()
+        
+        _rank_ratio = 0.25
+        rank1 = min(in_planes, planes)
+        rank2 = min(planes, planes)
+
+        self.conv1 = FusedConvKernel(in_planes, planes, padding=1, stride=stride, factorization_ratio=0.25)
+        self.conv2 = FusedConvKernel(planes, planes, padding=1, stride=1)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.conv1(x))
+        out = self.conv2(out)
         out += self.shortcut(x)
         out = F.relu(out)
         return out
