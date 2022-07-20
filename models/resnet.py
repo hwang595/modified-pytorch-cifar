@@ -28,7 +28,9 @@ class FusedConvKernel(nn.Module):
         self.dilation = dilation
     
     def forward(self, x):
-        x = fused_factorized_conv(x, conv1_weight, conv2_weight, self.padding, self.stride, self.dilation)
+        x = fused_factorized_conv(x, 
+                        self.conv1_weight, self.conv2_weight, 
+                        self.padding, self.stride, self.dilation)
         #x = self.u_layer(x)
         #x = self.u_bn(x)
         #x = self.v_layer(x)
