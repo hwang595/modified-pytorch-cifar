@@ -13,11 +13,11 @@ import torch.nn.functional as F
 
 class FusedConvKernel(nn.Module):
     def __init__(in_dim, out_dim, padding=0, stride=1, dilation=1, factorization_ratio=0.125):
-    rank = int(factorization_ratio * min(in_dim, out_dim))
-    self.u_layer = nn.Conv2d(in_dim, rank, stride=stride, padding=padding, bias=False)
-    self.u_bn = nn.BatchNorm2d(rank)
-    self.v_layer = nn.Conv2d(rank, out_dim, stride=1, padding=1, bias=False)
-    self.v_bn = nn.BatchNorm2d(planes)
+        rank = int(factorization_ratio * min(in_dim, out_dim))
+        self.u_layer = nn.Conv2d(in_dim, rank, stride=stride, padding=padding, bias=False)
+        self.u_bn = nn.BatchNorm2d(rank)
+        self.v_layer = nn.Conv2d(rank, out_dim, stride=1, padding=1, bias=False)
+        self.v_bn = nn.BatchNorm2d(planes)
     
     @torch.jit.script
     def forward(self, x):
