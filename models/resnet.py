@@ -25,7 +25,7 @@ class FusedConvKernel(nn.Module):
         x = self.u_bn(x)
         x = self.v_layer(x)
         x = self.v_bn(x)    
-    return x
+        return x
 
 
 class BasicBlock(nn.Module):
