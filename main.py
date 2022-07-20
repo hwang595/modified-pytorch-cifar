@@ -69,7 +69,8 @@ def param_counter(model):
 # Model
 print('==> Building model..')
 #net = LowrankResNet50()
-net = ResNet18()
+#net = ResNet18()
+net = FusedLowrankResNet18()
 net = net.to(device)
 cudnn.benchmark = True
 

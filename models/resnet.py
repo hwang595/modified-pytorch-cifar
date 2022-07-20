@@ -232,6 +232,9 @@ def ResNet18():
 def LowrankResNet18():
     return ResNet(LowRankBasicBlock, [2, 2, 2, 2])
 
+def FusedLowrankResNet18():
+    return ResNet(FusedLowRankBasicBlock, [2, 2, 2, 2])
+
 def ResNet34():
     return ResNet(BasicBlock, [3, 4, 6, 3])
 
