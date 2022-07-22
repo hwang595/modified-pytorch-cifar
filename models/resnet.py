@@ -10,16 +10,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from typing import List
+
 @torch.jit.script
-def fused_factorized_conv(x, conv1_weight, conv2_weight, padding=0, stride=1, dilation=1):
+def fused_factorized_conv(x, conv1_weight, conv2_weight, padding: List[int], stride: List[int], dilation=1):
     out = F.conv2d(x, conv1_weight, bias=None, 
                     stride=stride, padding=padding, dilation=dilation)
     out = F.conv2d(out, conv2_weight, bias=None,
-                stride=1, padding=1, dilation=1)
+                stride=1, padding=0, dilation=1)
     return out
 
 class FusedConvKernel(nn.Module):
-    def __init__(in_dim, out_dim, kernel_size=3, factorization_ratio=0.125, padding=0, stride=1, dilation=1):
+    def __init__(self, in_dim, out_dim, kernel_size=3, factorization_ratio=0.125, padding=0, stride=1, dilation=1):
+        super(FusedConvKernel, self).__init__()
         rank = int(factorization_ratio * min(in_dim, out_dim))
         self.conv1_weight = torch.nn.Parameter(torch.randn(rank, in_dim, kernel_size, kernel_size))
         self.conv2_weight = torch.nn.Parameter(torch.randn(out_dim, rank, 1, 1))
@@ -31,11 +34,38 @@ class FusedConvKernel(nn.Module):
         x = fused_factorized_conv(x, 
                         self.conv1_weight, self.conv2_weight, 
                         self.padding, self.stride, self.dilation)
-        #x = self.u_layer(x)
-        #x = self.u_bn(x)
-        #x = self.v_layer(x)
-        #x = self.v_bn(x)
         return x
+
+
+class FusedLowRankBasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(FusedLowRankBasicBlock, self).__init__()
+        
+        _rank_ratio = 0.25
+
+        self.conv1 = FusedConvKernel(in_planes, planes, kernel_size=3, 
+                        factorization_ratio=0.25, padding=1, stride=stride, dilation=1)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = FusedConvKernel(planes, planes, kernel_size=3, 
+                                    factorization_ratio=0.25, padding=1, stride=1, dilation=1)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
 
 
 class BasicBlock(nn.Module):
@@ -97,39 +127,6 @@ class LowRankBasicBlock(nn.Module):
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1_v(self.conv1_u(x))))
         out = self.bn2(self.conv2_v(self.conv2_u(out)))
-        out += self.shortcut(x)
-        out = F.relu(out)
-        return out
-
-
-class FusedLowRankBasicBlock(nn.Module):
-    expansion = 1
-
-    def __init__(self, in_planes, planes, stride=1):
-        super(FusedLowRankBasicBlock, self).__init__()
-        
-        _rank_ratio = 0.25
-        rank1 = min(in_planes, planes)
-        rank2 = min(planes, planes)
-
-        self.conv1 = FusedConvKernel(in_planes, planes, kernel_size=3, 
-                        factorization_ratio=0.25, padding=1, stride=stride)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = FusedConvKernel(planes, planes, kernel_size=3, 
-                                    factorization_ratio=0.25, padding=1, stride=1)
-        self.bn2 = nn.BatchNorm2d(planes)
-
-        self.shortcut = nn.Sequential()
-        if stride != 1 or in_planes != self.expansion*planes:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes,
-                          kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
-            )
-
-    def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
         out = F.relu(out)
         return out

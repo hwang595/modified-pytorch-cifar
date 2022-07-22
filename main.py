@@ -12,6 +12,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+from apex.optimizers import FusedSGD
 
 from models import *
 #from utils import progress_bar
@@ -48,13 +49,13 @@ trainset = torchvision.datasets.CIFAR10(
     root='./data', train=True, download=True, transform=transform_train)
 trainloader = torch.utils.data.DataLoader(
     trainset, batch_size=args.batch_size, shuffle=True, 
-    pin_memory=True, num_workers=4)
+    pin_memory=True, num_workers=4, drop_last=False)
 
 testset = torchvision.datasets.CIFAR10(
     root='./data', train=False, download=True, transform=transform_test)
 testloader = torch.utils.data.DataLoader(
     testset, batch_size=100, shuffle=False, 
-    pin_memory=True, num_workers=4)
+    pin_memory=True, num_workers=4, drop_last=False)
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer',
            'dog', 'frog', 'horse', 'ship', 'truck')
@@ -69,8 +70,8 @@ def param_counter(model):
 # Model
 print('==> Building model..')
 #net = LowrankResNet50()
-#net = ResNet18()
-net = FusedLowrankResNet18()
+net = ResNet18()
+#net = FusedLowrankResNet18()
 net = net.to(device)
 cudnn.benchmark = True
 
@@ -90,7 +91,8 @@ if args.resume:
     start_epoch = checkpoint['epoch']
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(net.parameters(), lr=args.lr,
+#optimizer = optim.SGD(net.parameters(), lr=args.lr,
+optimizer = FusedSGD(net.parameters(), lr=args.lr,
                       momentum=0.9, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150,225], gamma=0.1)
 
