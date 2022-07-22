@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from typing import List
 
 @torch.jit.script
-def fused_factorized_conv(x, conv1_weight, conv2_weight, padding: List[int], stride: List[int], dilation=1):
+def fused_factorized_conv(x, conv1_weight, conv2_weight, padding: int, stride: int, dilation=int):
     out = F.conv2d(x, conv1_weight, bias=None, 
                     stride=stride, padding=padding, dilation=dilation)
     out = F.conv2d(out, conv2_weight, bias=None,
